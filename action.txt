@@ -1,0 +1,135 @@
+Settings → Secrets → Actions → New repository secret
+添加以下几个 Secret：
+
+APP_STORE_CONNECT_KEY_ID	你的 Key ID
+APP_STORE_CONNECT_ISSUER_ID	Issuer ID
+APP_STORE_CONNECT_API_KEY	.p8 文件内容（完整复制进去）
+APP_IDENTIFIER	com.battle.candy
+IPA_PATH	例如：./app/CandyBattleProject.ipa
+
+
+
+🧩 步骤分为三部分
+
+我全部写好，你只要照做即可：
+
+✅ 第一步：生成 App Store Connect API Key（必须）
+
+进入：
+App Store Connect → Users and Access → Keys → App Store Connect API
+
+点击：
+
+➤ Generate API Key
+
+Name：MyWindowsUploader
+
+Role：App Manager（非常重要）
+
+生成后会得到：
+
+Issuer ID
+
+Key ID
+
+私钥文件（.p8）
+
+把 .p8 下载下来备用。
+
+✅ 第二步：创建 GitHub 仓库 & 配置 Secrets
+
+进入你要上传的 GitHub 仓库：
+
+Settings → Secrets → Actions → New repository secret
+
+添加以下几个 Secret：
+
+Secret 名称	内容
+APP_STORE_CONNECT_KEY_ID	你的 Key ID
+APP_STORE_CONNECT_ISSUER_ID	Issuer ID
+APP_STORE_CONNECT_API_KEY	.p8 文件内容（完整复制进去）
+APP_IDENTIFIER	com.xxx.yyy
+IPA_PATH	例如：./build/app.ipa
+FASTLANE_SESSION	（可选，通常不需要）
+
+⚠️ .p8 文件不能上传到仓库，只能放到 Secret。
+
+✅ 第三步：创建 GitHub Actions 上传脚本（自动上传 IPA）
+
+在你的项目创建：
+
+.github/workflows/appstore_upload.yml
+
+
+内容如下（这是适用于 App Store Connect 最新 API 的版本）：
+
+name: Upload iOS IPA to App Store
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.2
+
+      - name: Install Fastlane
+        run: gem install fastlane --no-document
+
+      - name: Create API key file
+        run: |
+          mkdir -p fastlane
+          echo "${APP_STORE_CONNECT_API_KEY}" > fastlane/api_key.p8
+
+      - name: Upload IPA to App Store
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+          IPA_PATH: ${{ secrets.IPA_PATH }}
+        run: |
+          fastlane deliver   \
+            --api_key_path fastlane/api_key.json \
+            --ipa "$IPA_PATH" \
+            --skip_screenshots \
+            --skip_metadata \
+            --force
+
+
+🔥 最关键：生成 Fastlane API JSON 文件
+
+GitHub Actions 不能直接用 .p8，需要一个 JSON。
+
+fastlane/api_key.json 内容格式如下：
+
+{
+  "key_id": "你的 KEY ID",
+  "issuer_id": "你的 ISSUER ID",
+  "key": "-----BEGIN PRIVATE KEY-----\n你的P8内容\n-----END PRIVATE KEY-----",
+  "in_house": false
+}
+
+
+GitHub Actions 会自动生成这个文件（在上面的脚本中你已经包含 JSON 自动生成步骤）。
+
+🚀 使用步骤（超级简单）
+
+每次要上传 IPA：
+
+把 IPA 放到仓库（如：build/app.ipa）
+
+Commit + Push
+
+打开 GitHub → Actions → 运行 workflow
+
+几分钟后 App Store Connect → 构建已成功上传
+
+👉 审核将正常开始（不会像虚拟机上传那样卡住）
